@@ -1,0 +1,123 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-white text-gray-900;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    margin: 0;
+  }
+}
+
+@layer components {
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-track {
+    @apply bg-gray-100;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 rounded-full;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-400;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* Chatbot Message Formatting */
+.chatbot-content {
+  line-height: 1.6;
+}
+
+.chatbot-content .chat-field {
+  display: inline-block;
+  font-weight: 600;
+  color: #ea580c;
+  margin-top: 8px;
+  margin-bottom: 2px;
+}
+
+.chatbot-content br {
+  display: block;
+  content: "";
+  margin: 4px 0;
+}
+
+.chatbot-content .nested-bullet {
+  display: block;
+  margin-left: 20px;
+  margin-top: 4px;
+}
+
+/* Chat window animation */
+@keyframes slide-in-from-bottom {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-in.slide-in-from-bottom-5 {
+  animation: slide-in-from-bottom 0.3s ease-out;
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes reverse-spin-slow {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+
+@keyframes bounce-slow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-20px); }
+}
+
+@keyframes text-pulse {
+  0%, 100% { color: #111827; }
+  50% { color: #4b5563; }
+}
+
+@keyframes primary-pulse {
+  0%, 100% { color: #ea580c; }
+  50% { color: #fb923c; }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 15s linear infinite;
+}
+
+.animate-reverse-spin-slow {
+  animation: reverse-spin-slow 20s linear infinite;
+}
+
+.animate-bounce-slow {
+  animation: bounce-slow 4s ease-in-out infinite;
+}
+
+.animate-text-pulse {
+  animation: text-pulse 4s ease-in-out infinite;
+}
+
+.animate-primary-pulse {
+  animation: primary-pulse 3s ease-in-out infinite;
+}
