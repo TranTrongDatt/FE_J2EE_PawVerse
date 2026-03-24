@@ -76,7 +76,7 @@ Frontend của PawVerse không chỉ là một trang thương mại điện tử
 ## 🤝 Đội Ngũ Duo Project
 
 *   **Leader ([FarolNguyen](https://github.com/farolnguyen/-J2EE-PawVerse.git))**: Định hướng Backend, API Architecture & Project Core.
-*   Gmail Leader: farolnguyen824@gmail.com
+*   **Leader Gmail: farolnguyen824@gmail.com
 *   **UI/UX Lead (HuyVTr)**: Thiết kế giao diện, Phát triển Frontend & Tối ưu hóa trải nghiệm người dùng.
 
 ---
