@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
   Home, 
@@ -30,9 +30,7 @@ import useAuthStore from '../../store/useAuthStore';
 import bookingService from '../../api/bookingService';
 import petService from '../../api/petService';
 import PetProfileModal from '../../components/pet/PetProfileModal';
-import { formatPrice } from '../../utils/formatters';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
-import toast from 'react-hot-toast';
 
 const SERVICE_MAP = {
   PET_HOTEL: { name: 'Pet Hotel', icon: Building2 },

@@ -1,5 +1,5 @@
-import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
-import { useState, useEffect, useRef } from 'react';
+import { useParams, Link, useLocation } from 'react-router-dom';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   ArrowLeft, Package, MapPin, CreditCard, Clock, CheckCircle, XCircle, 
@@ -55,12 +55,6 @@ const statusConfig = {
 };
 
 const STATUS_FLOW = ['PENDING', 'CONFIRMED', 'SHIPPING', 'DELIVERED'];
-
-const paymentMethodLabels = {
-  COD: 'Thanh toán khi nhận hàng (COD)',
-  VNPAY: 'Thanh toán qua VNPay',
-  MOMO: 'Thanh toán qua Ví MoMo',
-};
 
 function getNextStatus(current) {
   const idx = STATUS_FLOW.indexOf(current);
@@ -472,7 +466,6 @@ function StaffStatusActions({ order, onStatusChange, isPending }) {
 
 export default function OrderDetailPage() {
   const { id } = useParams();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const location = useLocation();
   

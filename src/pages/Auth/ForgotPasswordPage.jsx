@@ -70,7 +70,7 @@ export default function ForgotPasswordPage() {
     try {
       await authService.forgotPassword(submittedEmail);
       toast.success('Đã gửi lại mã OTP!');
-    } catch (error) {
+    } catch (_error) {
       toast.error('Không thể gửi lại. Thử lại sau.');
     } finally {
       setIsLoading(false);

@@ -27,7 +27,7 @@ export default function ProfilePage() {
   const [showVerifyForm, setShowVerifyForm] = useState(false);
   const [verifyOtp, setVerifyOtp] = useState('');
   const queryClient = useQueryClient();
-  const { user, updateUser } = useAuthStore();
+  const { updateUser } = useAuthStore();
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ['profile'],

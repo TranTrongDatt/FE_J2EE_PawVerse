@@ -105,7 +105,6 @@ function BookingProgressBar({ booking }) {
         <div className="relative px-4 font-black italic uppercase">
           <div className="flex items-start justify-between mb-2 relative z-10 font-black italic">
             {PROGRESS_STEPS.map((step, idx) => {
-              const isCompleted = idx < currentIdx || (idx === currentIdx && (contactDone || idx < currentIdx));
               const isCurrent = idx === currentIdx && !contactDone;
               const isDone = currentIdx > idx || (idx === 2 && contactDone);
               const StepIcon = step.icon;

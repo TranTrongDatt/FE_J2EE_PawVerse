@@ -318,7 +318,6 @@ export default function WishlistPage() {
 
 function CardProduct({ product, onAddToCart, isAdding = false }) {
   const rating = product.avgRating || 0;
-  const soldCount = product.soLuongDaBan || 0;
 
   return (
     <div className="bg-white rounded-3xl md:rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden hover:shadow-2xl hover:-translate-y-3 transition-all duration-500 group relative flex flex-col h-full focus-within:ring-2 focus-within:ring-orange-500 outline-none">

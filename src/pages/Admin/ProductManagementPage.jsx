@@ -161,6 +161,7 @@ export default function ProductManagementPage() {
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['admin-products'] }),
   });
 
+  // eslint-disable-next-line no-unused-vars
   const toggleFeaturedMutation = useMutation({
     mutationFn: ({ id, isFeatured }) => adminService.toggleProductFeatured(id, isFeatured),
     onMutate: async ({ id, isFeatured }) => {

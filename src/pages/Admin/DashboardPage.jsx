@@ -4,7 +4,7 @@ import { Users, UserCheck, UserX, ShieldCheck, Shield, Clock, Sparkles, Trending
 import { adminService } from '../../api/adminService';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 
-const StatCard = ({ title, value, icon: Icon, color, bgColor, subtitle }) => (
+const StatCard = ({ title, value, icon: Icon, color, bgColor }) => (
   <div className="bg-white/80 backdrop-blur-xl rounded-[2.5rem] border border-white p-7 shadow-sm hover:shadow-xl transition-all group overflow-hidden relative">
     <div className={`absolute -right-4 -bottom-4 ${color} opacity-5 group-hover:scale-110 group-hover:rotate-12 transition-all duration-700`}>
        <Icon size={120} />

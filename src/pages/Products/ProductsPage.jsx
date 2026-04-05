@@ -17,7 +17,6 @@ export default function ProductsPage() {
   const [localMinPrice, setLocalMinPrice] = useState('');
   const [localMaxPrice, setLocalMaxPrice] = useState('');
 
-  const { incrementCart } = useCartStore();
   const [addingIds, setAddingIds] = useState(new Set());
 
   // Get filters from URL params
@@ -105,7 +104,7 @@ export default function ProductsPage() {
     } finally {
       setAddingIds(prev => { const s = new Set(prev); s.delete(productId); return s; });
     }
-  }, [addingIds]);
+  }, [addingIds, queryClient]);
 
   const products = productsData?.content || [];
   const totalPages = productsData?.totalPages || 0;
@@ -360,7 +359,6 @@ export default function ProductsPage() {
 
 function ProductCard({ product, viewMode, onAddToCart, isAdding = false }) {
   const rating = product.avgRating || 0;
-  const reviewCount = product.totalReviews || 0;
   const soldCount = product.soLuongDaBan || 0; // TRỎ ĐÚNG TRƯỜNG soLuongDaBan TỪ API - Vui lòng kiểm tra cột so_luong_da_ban trong bảng product (SQL)
 
   if (viewMode === 'list') {

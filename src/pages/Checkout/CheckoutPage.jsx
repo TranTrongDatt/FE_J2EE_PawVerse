@@ -33,7 +33,7 @@ import { cartService } from '../../api/cartService';
 import { orderService } from '../../api/orderService';
 import { authService } from '../../api/authService';
 import { formatPrice } from '../../utils/formatters';
-import { lookupHCMDistrict, lookupHCMDistrictByCoords, isActuallyThuDuc } from '../../utils/hcmDistrictMapping';
+import { lookupHCMDistrictByCoords, isActuallyThuDuc } from '../../utils/hcmDistrictMapping';
 import { getProvinces, getDistricts, getWards, findProvinceCode, findDistrictCode } from '../../api/vietnamAddressService';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import toast from 'react-hot-toast';
