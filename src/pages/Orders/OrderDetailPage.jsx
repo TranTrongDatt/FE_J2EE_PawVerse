@@ -1,15 +1,18 @@
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   ArrowLeft, Package, MapPin, CreditCard, Clock, CheckCircle, XCircle, 
   Truck, ArrowRight, Ban, ShieldCheck, Download, Star, Bone, PawPrint, 
-  ChevronRight, Hash, ReceiptText, User, Zap, AlertTriangle
+  ChevronRight, Hash, ReceiptText, User, Zap, AlertTriangle, X, MessageSquare,
+  ImagePlus, Film, Trash2, Smile
 } from 'lucide-react';
 import { orderService } from '../../api/orderService';
 import { adminService } from '../../api/adminService';
+import { productService } from '../../api/productService';
 import { formatPrice, formatDate } from '../../utils/formatters';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import useAuthStore from '../../store/useAuthStore';
 import toast from 'react-hot-toast';
 
 const statusConfig = {
@@ -174,6 +177,253 @@ function OrderProgressBar({ currentStatus }) {
   );
 }
 
+function ReviewModal({ isOpen, onClose, onSubmit, productName, isPending }) {
+  const [rating, setRating] = useState(5);
+  const [hoverRating, setHoverRating] = useState(0);
+  const [comment, setComment] = useState('');
+  const [mediaFiles, setMediaFiles] = useState([]);
+  const [mediaPreviews, setMediaPreviews] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const textareaRef = useRef(null);
+
+  const EMOJI_LIST = [
+    '😀','😊','😍','🥰','😘','😎','🤩','😂','🤣','😅',
+    '😢','😭','😤','😡','🤔','😱','🥺','😴','🤢','🤮',
+    '👍','👎','👏','🙏','💪','✌️','🤝','❤️','💕','💖',
+    '⭐','🌟','✨','🔥','💯','🎉','🎊','🏆','👑','💎',
+    '🐶','🐱','🐾','🦴','🐕','🐈','🐰','🐹','🐦','🐟',
+    '🛍️','📦','🚚','✅','❌','⚠️','💰','🎁','🛒','📱',
+  ];
+
+  const insertEmoji = (emoji) => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const newComment = comment.slice(0, start) + emoji + comment.slice(end);
+      setComment(newComment);
+      setTimeout(() => {
+        textarea.focus();
+        textarea.selectionStart = textarea.selectionEnd = start + emoji.length;
+      }, 0);
+    } else {
+      setComment(prev => prev + emoji);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  const handleAddFiles = (e) => {
+    const files = Array.from(e.target.files);
+    if (mediaFiles.length + files.length > 5) {
+      toast.error('Tối đa 5 file ảnh/video');
+      return;
+    }
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4', 'video/webm'];
+    const validFiles = files.filter(f => {
+      if (!allowedTypes.includes(f.type)) {
+        toast.error(`${f.name}: Định dạng không hợp lệ`);
+        return false;
+      }
+      const isVideo = f.type.startsWith('video/');
+      const maxSize = isVideo ? 30 * 1024 * 1024 : 5 * 1024 * 1024;
+      if (f.size > maxSize) {
+        toast.error(`${f.name}: Vượt quá ${isVideo ? '30MB' : '5MB'}`);
+        return false;
+      }
+      return true;
+    });
+
+    const newFiles = [...mediaFiles, ...validFiles];
+    setMediaFiles(newFiles);
+
+    const newPreviews = validFiles.map(f => ({
+      url: URL.createObjectURL(f),
+      type: f.type.startsWith('video/') ? 'video' : 'image',
+      name: f.name,
+    }));
+    setMediaPreviews(prev => [...prev, ...newPreviews]);
+    e.target.value = '';
+  };
+
+  const removeFile = (index) => {
+    URL.revokeObjectURL(mediaPreviews[index].url);
+    setMediaFiles(prev => prev.filter((_, i) => i !== index));
+    setMediaPreviews(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSubmit = async () => {
+    if (!comment.trim()) {
+      toast.error('Vui lòng nhập nội dung đánh giá');
+      return;
+    }
+
+    let mediaUrls = [];
+    if (mediaFiles.length > 0) {
+      setUploading(true);
+      try {
+        mediaUrls = await productService.uploadReviewMedia(mediaFiles);
+      } catch (err) {
+        toast.error(err?.response?.data?.message || 'Upload ảnh/video thất bại');
+        setUploading(false);
+        return;
+      }
+      setUploading(false);
+    }
+
+    onSubmit({ rating, comment, mediaUrls });
+  };
+
+  return (
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-gray-950/40 backdrop-blur-sm animate-in fade-in duration-300" onClick={onClose} />
+      <div className="relative bg-white/95 backdrop-blur-2xl rounded-[2.5rem] border border-white shadow-[0_32px_64px_-16px_rgba(0,0,0,0.2)] w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
+        <div className="h-2 w-full bg-amber-500" />
+        <div className="p-8">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-600 shadow-lg shadow-amber-100">
+                <Star size={24} />
+              </div>
+              <div>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">ĐÁNH GIÁ SẢN PHẨM</p>
+                <p className="text-sm font-black text-gray-900 tracking-tight italic truncate max-w-[280px]">{productName}</p>
+              </div>
+            </div>
+            <button onClick={onClose} className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all">
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="mb-6">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] mb-3">CHỌN SỐ SAO</p>
+            <div className="flex gap-2">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  onClick={() => setRating(star)}
+                  onMouseEnter={() => setHoverRating(star)}
+                  onMouseLeave={() => setHoverRating(0)}
+                  className="transition-all duration-200 hover:scale-125 active:scale-90"
+                >
+                  <Star
+                    size={36}
+                    className={`${
+                      star <= (hoverRating || rating)
+                        ? 'fill-amber-400 text-amber-400'
+                        : 'text-gray-200'
+                    } transition-colors`}
+                  />
+                </button>
+              ))}
+              <span className="ml-3 self-center text-lg font-black text-gray-900 italic">{hoverRating || rating}/5</span>
+            </div>
+          </div>
+
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">NỘI DUNG ĐÁNH GIÁ</p>
+              <button
+                type="button"
+                onClick={() => setShowEmojiPicker(prev => !prev)}
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${
+                  showEmojiPicker ? 'bg-amber-100 text-amber-600' : 'bg-gray-50 text-gray-400 hover:text-amber-500 hover:bg-amber-50'
+                }`}
+                title="Chọn emoji"
+              >
+                <Smile size={16} />
+              </button>
+            </div>
+
+            {showEmojiPicker && (
+              <div className="mb-3 p-3 bg-white rounded-2xl border border-gray-100 shadow-lg shadow-gray-100/50 max-h-40 overflow-y-auto">
+                <div className="grid grid-cols-10 gap-1">
+                  {EMOJI_LIST.map((emoji, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => insertEmoji(emoji)}
+                      className="w-8 h-8 flex items-center justify-center text-lg rounded-lg hover:bg-amber-50 hover:scale-125 transition-all active:scale-90"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <textarea
+              ref={textareaRef}
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              placeholder="Chia sẻ trải nghiệm của bạn về sản phẩm... 🐾"
+              rows={4}
+              maxLength={5000}
+              className="w-full px-5 py-4 rounded-2xl border border-gray-100 bg-gray-50/50 text-sm text-gray-900 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-300 resize-none transition-all"
+            />
+            <p className="text-right text-[10px] font-bold text-gray-300 mt-1">{comment.length}/5000</p>
+          </div>
+
+          <div className="mb-6">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] mb-3">ẢNH / VIDEO <span className="text-gray-300">(không bắt buộc, tối đa 5)</span></p>
+            
+            <div className="flex flex-wrap gap-3">
+              {mediaPreviews.map((preview, idx) => (
+                <div key={idx} className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-100 group">
+                  {preview.type === 'video' ? (
+                    <div className="w-full h-full bg-gray-900 flex items-center justify-center">
+                      <Film size={24} className="text-white" />
+                    </div>
+                  ) : (
+                    <img src={preview.url} alt="" className="w-full h-full object-cover" />
+                  )}
+                  <button
+                    onClick={() => removeFile(idx)}
+                    className="absolute top-1 right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <Trash2 size={10} className="text-white" />
+                  </button>
+                </div>
+              ))}
+
+              {mediaFiles.length < 5 && (
+                <label className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center cursor-pointer hover:border-amber-300 hover:bg-amber-50/50 transition-all">
+                  <ImagePlus size={20} className="text-gray-300" />
+                  <span className="text-[8px] font-bold text-gray-300 mt-1">THÊM</span>
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
+                    onChange={handleAddFiles}
+                    className="hidden"
+                  />
+                </label>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={onClose}
+              className="py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all"
+            >
+              Để sau
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={isPending || uploading || !comment.trim()}
+              className="py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-white bg-amber-500 shadow-xl shadow-amber-200 hover:bg-amber-600 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {uploading ? 'ĐANG TẢI...' : isPending ? 'ĐANG GỬI...' : 'GỬI ĐÁNH GIÁ'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StaffStatusActions({ order, onStatusChange, isPending }) {
   const nextStatus = getNextStatus(order.orderStatus);
   const isFinal = order.orderStatus === 'DELIVERED' || order.orderStatus === 'CANCELLED';
@@ -227,12 +477,35 @@ export default function OrderDetailPage() {
   const location = useLocation();
   
   const isStaffView = location.pathname.startsWith('/staff') || location.pathname.startsWith('/admin');
+  const { isAuthenticated } = useAuthStore();
 
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, type: 'UPDATE', label: '', status: '' });
+  const [reviewModal, setReviewModal] = useState({ isOpen: false, productId: null, productName: '' });
 
   const { data: order, isLoading } = useQuery({
     queryKey: ['order', id],
     queryFn: () => isStaffView ? adminService.getOrderById(id) : orderService.getOrderById(id),
+  });
+
+  // Fetch which products in this order have already been reviewed
+  const { data: reviewedProductIds = [] } = useQuery({
+    queryKey: ['reviewed-products', id],
+    queryFn: () => productService.getReviewedProducts(id),
+    enabled: !!order && order.orderStatus === 'DELIVERED' && isAuthenticated && !isStaffView,
+  });
+
+  const reviewMutation = useMutation({
+    mutationFn: (data) => productService.createReview(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['order', id]);
+      queryClient.invalidateQueries(['reviewed-products', id]);
+      setReviewModal({ isOpen: false, productId: null, productName: '' });
+      toast.success('ĐÁNH GIÁ THÀNH CÔNG! CẢM ƠN BẠN 🎉', {
+        icon: '⭐',
+        style: { borderRadius: '15px', background: '#111', color: '#fff', fontSize: '11px', fontWeight: 'bold' }
+      });
+    },
+    onError: (err) => toast.error(err?.response?.data?.message || 'Không thể gửi đánh giá'),
   });
 
   const cancelMutation = useMutation({
@@ -302,6 +575,14 @@ export default function OrderDetailPage() {
         type={confirmModal.type}
       />
 
+      <ReviewModal
+        isOpen={reviewModal.isOpen}
+        onClose={() => setReviewModal({ isOpen: false, productId: null, productName: '' })}
+        onSubmit={({ rating, comment, mediaUrls }) => reviewMutation.mutate({ productId: reviewModal.productId, rating, comment, mediaUrls })}
+        productName={reviewModal.productName}
+        isPending={reviewMutation.isPending}
+      />
+
       <div className="absolute top-[5%] right-[-5%] opacity-[0.02] rotate-12 pointer-events-none"><Package size={400} /></div>
       <div className="absolute bottom-[10%] left-[-5%] opacity-[0.03] -rotate-12 pointer-events-none"><Bone size={350} /></div>
 
@@ -322,7 +603,27 @@ export default function OrderDetailPage() {
 
             <div className="flex items-center gap-3">
                  {order.orderStatus === 'DELIVERED' && (
-                    <button onClick={() => adminService.downloadInvoice(id)} className="h-14 px-8 bg-emerald-600 text-white rounded-full font-black text-[10px] uppercase tracking-widest hover:bg-emerald-700 shadow-xl flex items-center gap-3">
+                    <button
+                      onClick={async () => {
+                        try {
+                          const blob = isStaffView
+                            ? await adminService.downloadInvoice(id)
+                            : await orderService.downloadInvoice(id);
+                          const url = URL.createObjectURL(blob);
+                          const link = document.createElement('a');
+                          link.href = url;
+                          link.download = `hoadon-${order.orderNumber || order.orderId}.pdf`;
+                          document.body.appendChild(link);
+                          link.click();
+                          document.body.removeChild(link);
+                          URL.revokeObjectURL(url);
+                          toast.success('Xuất hóa đơn thành công!');
+                        } catch {
+                          toast.error('Không thể xuất hóa đơn PDF');
+                        }
+                      }}
+                      className="h-14 px-8 bg-emerald-600 text-white rounded-full font-black text-[10px] uppercase tracking-widest hover:bg-emerald-700 shadow-xl flex items-center gap-3"
+                    >
                       <Download size={18} /> XUẤT HÓA ĐƠN PDF
                     </button>
                  )}
@@ -379,7 +680,23 @@ export default function OrderDetailPage() {
                                         </div>
                                         <div className="flex items-center justify-between">
                                             <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest bg-gray-50 px-3 py-1 rounded-full">SỐ LƯỢNG: {item.quantity}</span>
-                                            <p className="text-xs font-black text-gray-950 italic">Tổng: {formatPrice(item.total || item.price * item.quantity)}</p>
+                                            <div className="flex items-center gap-3">
+                                                {!isStaffView && isAuthenticated && order.orderStatus === 'DELIVERED' && (
+                                                    reviewedProductIds.includes(item.productId) ? (
+                                                      <span className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 text-[10px] font-black uppercase tracking-widest">
+                                                        <CheckCircle size={12} /> ĐÃ ĐÁNH GIÁ
+                                                      </span>
+                                                    ) : (
+                                                      <button
+                                                        onClick={() => setReviewModal({ isOpen: true, productId: item.productId, productName: item.productName })}
+                                                        className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-amber-50 text-amber-600 border border-amber-100 text-[10px] font-black uppercase tracking-widest hover:bg-amber-100 hover:border-amber-200 transition-all active:scale-95"
+                                                      >
+                                                        <Star size={12} className="fill-amber-400" /> ĐÁNH GIÁ
+                                                      </button>
+                                                    )
+                                                )}
+                                                <p className="text-xs font-black text-gray-950 italic">Tổng: {formatPrice(item.total || item.price * item.quantity)}</p>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

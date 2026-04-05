@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import useAuthStore from '../../store/useAuthStore';
-import useCartStore from '../../store/useCartStore';
+import useCartStore, { getCartTotalQuantity } from '../../store/useCartStore';
 import toast from 'react-hot-toast';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { authService } from '../../api/authService';
@@ -52,7 +52,7 @@ export default function OAuth2CallbackPage() {
         // Fetch cart count from backend to sync with database
         try {
           const cart = await cartService.getCart();
-          setCartCount(cart?.items?.length || 0);
+          setCartCount(getCartTotalQuantity(cart));
         } catch (error) {
           console.error('Failed to fetch cart:', error);
         }

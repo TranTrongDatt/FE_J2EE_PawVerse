@@ -75,6 +75,12 @@ export const productService = {
     return response.data.data;
   },
 
+  // Get reviewed product IDs for a specific order
+  getReviewedProducts: async (orderId) => {
+    const response = await api.get(`/api/user/reviews/reviewed-products/${orderId}`);
+    return response.data.data;
+  },
+
   // Create a review
   createReview: async (reviewData) => {
     const response = await api.post('/api/user/reviews', reviewData);
@@ -102,6 +108,16 @@ export const productService = {
   // Get user's own reviews
   getUserReviews: async (params = {}) => {
     const response = await api.get('/api/user/reviews', { params });
+    return response.data.data;
+  },
+
+  // Upload review media (images/videos)
+  uploadReviewMedia: async (files) => {
+    const formData = new FormData();
+    files.forEach((file) => formData.append('files', file));
+    const response = await api.post('/api/user/reviews/upload-media', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
     return response.data.data;
   },
 };

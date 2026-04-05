@@ -4,6 +4,7 @@ import Header from './Header';
 import Footer from './Footer';
 import CartSyncProvider from '../CartSyncProvider';
 import ChatBot from '../chatbot/ChatBot';
+import MiniCartDrawer from '../common/MiniCartDrawer';
 
 export default function MainLayout() {
   const { pathname, search } = useLocation();
@@ -23,6 +24,7 @@ export default function MainLayout() {
 
         <Footer />
         <ChatBot />
+        <MiniCartDrawer />
       </div>
     </CartSyncProvider>
   );

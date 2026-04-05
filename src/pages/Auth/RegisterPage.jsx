@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Eye, EyeOff, Loader2, Dog, Cat, PawPrint, ShieldCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
+import ReCAPTCHA from 'react-google-recaptcha';
 import { authService } from '../../api/authService';
 import { getPasswordStrength } from '../../utils/validators';
 
@@ -28,6 +29,8 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [recaptchaToken, setRecaptchaToken] = useState(null);
+  const recaptchaRef = useRef(null);
   const navigate = useNavigate();
 
   const {
@@ -43,15 +46,21 @@ export default function RegisterPage() {
   const passwordStrength = getPasswordStrength(password);
 
   const onSubmit = async (data) => {
+    if (!recaptchaToken) {
+      toast.error('Vui lòng xác thực reCAPTCHA');
+      return;
+    }
     setIsLoading(true);
     try {
-      await authService.register(data);
+      await authService.register({ ...data, recaptchaToken });
       toast.success('Đăng ký thành công! Vui lòng đăng nhập.');
       navigate('/login');
     } catch (error) {
       toast.error(error.response?.data?.message || 'Đăng ký thất bại');
     } finally {
       setIsLoading(false);
+      recaptchaRef.current?.reset();
+      setRecaptchaToken(null);
     }
   };
 
@@ -181,6 +190,17 @@ export default function RegisterPage() {
             </div>
 
             <div className="pt-4 flex flex-col gap-6">
+              {/* reCAPTCHA */}
+              <div className="flex justify-center">
+                <ReCAPTCHA
+                  ref={recaptchaRef}
+                  sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}
+                  onChange={(token) => setRecaptchaToken(token)}
+                  onExpired={() => setRecaptchaToken(null)}
+                  onErrored={() => setRecaptchaToken(null)}
+                />
+              </div>
+
               <button
                 type="submit"
                 disabled={isLoading}

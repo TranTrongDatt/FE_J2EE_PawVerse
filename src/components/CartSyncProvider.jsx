@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import useAuthStore from '../store/useAuthStore';
-import useCartStore from '../store/useCartStore';
+import useCartStore, { getCartTotalQuantity } from '../store/useCartStore';
 import { cartService } from '../api/cartService';
 
 export default function CartSyncProvider({ children }) {
@@ -12,7 +12,7 @@ export default function CartSyncProvider({ children }) {
       if (isAuthenticated) {
         try {
           const cart = await cartService.getCart();
-          setCartCount(cart?.items?.length || 0);
+          setCartCount(getCartTotalQuantity(cart));
         } catch (error) {
           console.error('Failed to sync cart count:', error);
           setCartCount(0);

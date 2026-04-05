@@ -7,7 +7,7 @@ import { formatPrice } from '../../utils/formatters';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import toast from 'react-hot-toast';
 import { cartService } from '../../api/cartService';
-import useCartStore from '../../store/useCartStore';
+import useCartStore, { getCartTotalQuantity } from '../../store/useCartStore';
 
 export default function ProductsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -96,9 +96,10 @@ export default function ProductsPage() {
       // Fetch cart count from backend to get accurate count
       const cart = await cartService.getCart();
       const { setCartCount } = useCartStore.getState();
-      setCartCount(cart?.items?.length || 0);
+      setCartCount(getCartTotalQuantity(cart));
       queryClient.invalidateQueries(['cart']);
       toast.success('Đã thêm vào giỏ hàng!');
+      useCartStore.getState().openCartDrawer();
     } catch (error) {
       toast.error(error?.response?.data?.message || 'Không thể thêm vào giỏ hàng');
     } finally {

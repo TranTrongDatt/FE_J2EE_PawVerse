@@ -1,14 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Eye, EyeOff, Loader2, Dog, Cat, PawPrint, ShieldCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
+import ReCAPTCHA from 'react-google-recaptcha';
 import { authService } from '../../api/authService';
 import { cartService } from '../../api/cartService';
 import useAuthStore from '../../store/useAuthStore';
-import useCartStore from '../../store/useCartStore';
+import useCartStore, { getCartTotalQuantity } from '../../store/useCartStore';
 
 const loginSchema = z.object({
   usernameOrEmail: z.string().min(1, 'Tên đăng nhập hoặc email không được để trống'),
@@ -20,6 +21,8 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [captcha, setCaptcha] = useState(null); // { token, question }
   const [captchaAnswer, setCaptchaAnswer] = useState('');
+  const [recaptchaToken, setRecaptchaToken] = useState(null);
+  const recaptchaRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -46,7 +49,7 @@ export default function LoginPage() {
   const onSubmit = async (data) => {
     setIsLoading(true);
     try {
-      const payload = { ...data };
+      const payload = { ...data, recaptchaToken };
       if (captcha) {
         payload.captchaToken = captcha.token;
         payload.captchaAnswer = captchaAnswer;
@@ -74,7 +77,7 @@ export default function LoginPage() {
 
       try {
         const cart = await cartService.getCart();
-        setCartCount(cart?.items?.length || 0);
+        setCartCount(getCartTotalQuantity(cart));
       } catch (error) {
         console.error('Failed to fetch cart:', error);
       }
@@ -98,11 +101,13 @@ export default function LoginPage() {
       toast.error(errData?.message || 'Đăng nhập thất bại');
     } finally {
       setIsLoading(false);
+      recaptchaRef.current?.reset();
+      setRecaptchaToken(null);
     }
   };
 
   const handleOAuthLogin = (provider) => {
-    // Use relative URL - proxied by Vite to http://localhost:8080
+    // Use relative URL - proxied by Vite to backend (port 8081)
     window.location.href = `/oauth2/authorization/${provider}`;
   };
 
@@ -235,10 +240,20 @@ export default function LoginPage() {
               </div>
             </div>
 
+            <div className="flex justify-center">
+              <ReCAPTCHA
+                ref={recaptchaRef}
+                sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}
+                onChange={(token) => setRecaptchaToken(token)}
+                onExpired={() => setRecaptchaToken(null)}
+                onErrored={() => setRecaptchaToken(null)}
+              />
+            </div>
+
             <div className="pt-2">
               <button
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || !recaptchaToken}
                 className="group relative w-full h-14 bg-gradient-to-r from-orange-600 to-orange-400 text-white text-xs font-black uppercase tracking-[0.2em] rounded-2xl shadow-xl shadow-orange-500/20 hover:shadow-orange-500/30 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden"
               >
                 <span className="relative z-10 flex items-center justify-center gap-2">

@@ -21,7 +21,7 @@ import { productService } from '../../api/productService';
 import { formatPrice } from '../../utils/formatters';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import toast from 'react-hot-toast';
-import useCartStore from '../../store/useCartStore';
+import useCartStore, { getCartTotalQuantity } from '../../store/useCartStore';
 
 export default function WishlistPage() {
   const queryClient = useQueryClient();
@@ -47,9 +47,10 @@ export default function WishlistPage() {
       await cartService.addToCart(productId, 1);
       const cart = await cartService.getCart();
       const { setCartCount } = useCartStore.getState();
-      setCartCount(cart?.items?.length || 0);
+      setCartCount(getCartTotalQuantity(cart));
       queryClient.invalidateQueries(['cart']);
       toast.success('Đã thêm vào giỏ hàng!');
+      useCartStore.getState().openCartDrawer();
     } catch (error) {
       toast.error(error?.response?.data?.message || 'Không thể thêm vào giỏ hàng');
     } finally {
@@ -75,9 +76,10 @@ export default function WishlistPage() {
     onSuccess: async () => {
       const cart = await cartService.getCart();
       const { setCartCount } = useCartStore.getState();
-      setCartCount(cart?.items?.length || 0);
+      setCartCount(getCartTotalQuantity(cart));
       queryClient.invalidateQueries(['cart']);
       toast.success('Đã thêm vào giỏ hàng!');
+      useCartStore.getState().openCartDrawer();
     },
     onError: () => {
       toast.error('Không thể thêm vào giỏ hàng');

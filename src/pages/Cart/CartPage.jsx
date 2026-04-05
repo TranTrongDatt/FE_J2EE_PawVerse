@@ -7,7 +7,7 @@ import { productService } from '../../api/productService';
 import { formatPrice } from '../../utils/formatters';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import toast from 'react-hot-toast';
-import useCartStore from '../../store/useCartStore';
+import useCartStore, { getCartTotalQuantity } from '../../store/useCartStore';
 import ConfirmModal from '../../components/common/ConfirmModal';
 
 export default function CartPage() {
@@ -26,9 +26,10 @@ export default function CartPage() {
       await cartService.addToCart(productId, 1);
       const cart = await cartService.getCart();
       const { setCartCount: updateCount } = useCartStore.getState();
-      updateCount(cart?.items?.length || 0);
+      updateCount(getCartTotalQuantity(cart));
       queryClient.invalidateQueries(['cart']);
       toast.success('Đã thêm vào giỏ hàng!');
+      useCartStore.getState().openCartDrawer();
     } catch (error) {
       toast.error(error?.response?.data?.message || 'Không thể thêm vào giỏ hàng');
     } finally {
@@ -57,9 +58,14 @@ export default function CartPage() {
   // Remove cart item mutation
   const removeMutation = useMutation({
     mutationFn: (itemId) => cartService.removeFromCart(itemId),
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries(['cart']);
-      setCartCount(cart?.items?.length - 1 || 0);
+      try {
+        const updatedCart = await cartService.getCart();
+        setCartCount(getCartTotalQuantity(updatedCart));
+      } catch {
+        setCartCount(Math.max(0, getCartTotalQuantity(cart) - 1));
+      }
       setIsRemoveModalOpen(false);
       setItemToRemove(null);
       toast.success('Đã xóa sản phẩm khỏi giỏ hàng');

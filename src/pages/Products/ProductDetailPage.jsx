@@ -1,14 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { Star, ShoppingCart, Heart, Minus, Plus, Truck, Shield, RotateCcw, Edit3, Trash2, MessageSquare, AlertTriangle, Eye, EyeOff, CheckCircle, PawPrint, BadgeCheck, Gift, ShieldCheck, Leaf } from 'lucide-react';
+import { Star, ShoppingCart, Heart, Minus, Plus, Truck, Shield, RotateCcw, Edit3, Trash2, MessageSquare, AlertTriangle, Eye, EyeOff, CheckCircle, PawPrint, BadgeCheck, Gift, ShieldCheck, Leaf, Smile } from 'lucide-react';
 import { productService } from '../../api/productService';
 import { cartService } from '../../api/cartService';
 import { wishlistService } from '../../api/wishlistService';
 import { formatPrice, formatDate } from '../../utils/formatters';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import toast from 'react-hot-toast';
-import useCartStore from '../../store/useCartStore';
+import useCartStore, { getCartTotalQuantity } from '../../store/useCartStore';
 import useAuthStore from '../../store/useAuthStore';
 
 export default function ProductDetailPage() {
@@ -33,6 +33,33 @@ export default function ProductDetailPage() {
   const [revealedReviews, setRevealedReviews] = useState(new Set());
   const [staffReplyText, setStaffReplyText] = useState('');
   const [replyingTo, setReplyingTo] = useState(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const reviewTextareaRef = useRef(null);
+
+  const EMOJI_LIST = [
+    '😀','😊','😍','🥰','😘','😎','🤩','😂','🤣','😅',
+    '😢','😭','😤','😡','🤔','😱','🥺','😴','🤢','🤮',
+    '👍','👎','👏','🙏','💪','✌️','🤝','❤️','💕','💖',
+    '⭐','🌟','✨','🔥','💯','🎉','🎊','🏆','👑','💎',
+    '🐶','🐱','🐾','🦴','🐕','🐈','🐰','🐹','🐦','🐟',
+    '🛍️','📦','🚚','✅','❌','⚠️','💰','🎁','🛒','📱',
+  ];
+
+  const insertReviewEmoji = (emoji) => {
+    const textarea = reviewTextareaRef.current;
+    if (textarea) {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const newComment = reviewComment.slice(0, start) + emoji + reviewComment.slice(end);
+      setReviewComment(newComment);
+      setTimeout(() => {
+        textarea.focus();
+        textarea.selectionStart = textarea.selectionEnd = start + emoji.length;
+      }, 0);
+    } else {
+      setReviewComment(prev => prev + emoji);
+    }
+  };
 
   const isStaff = user?.role === 'STAFF' || user?.role === 'ADMIN';
 
@@ -127,8 +154,8 @@ export default function ProductDetailPage() {
   };
 
   const handleSubmitReview = () => {
-    if (reviewComment.trim().length < 10) {
-      toast.error('Nội dung đánh giá phải từ 10 ký tự');
+    if (!reviewComment.trim()) {
+      toast.error('Vui lòng nhập nội dung đánh giá');
       return;
     }
     if (editingReview) {
@@ -206,9 +233,10 @@ export default function ProductDetailPage() {
     try {
       await cartService.addToCart(product.idProduct, quantity);
       const cart = await cartService.getCart();
-      setCartCount(cart?.items?.length || 0);
+      setCartCount(getCartTotalQuantity(cart));
       queryClient.invalidateQueries(['cart']);
       toast.success(`Đã thêm ${quantity} sản phẩm vào giỏ hàng!`);
+      useCartStore.getState().openCartDrawer();
     } catch (error) {
       toast.error(error?.response?.data?.message || 'Không thể thêm vào giỏ hàng');
     } finally {
@@ -226,8 +254,12 @@ export default function ProductDetailPage() {
   };
 
   const handleBuyNow = async () => {
-    await handleAddToCart();
-    navigate('/cart');
+    if (isAddingToCart) return;
+    try {
+      await handleAddToCart();
+    } catch {
+      // handleAddToCart already shows error toast
+    }
   };
 
   // Fetch related products
@@ -650,9 +682,40 @@ export default function ProductDetailPage() {
                         </div>
                     </div>
                      <div className="md:col-span-3 bg-white p-5 rounded-2xl border border-orange-100 shadow-sm">
-                        <label htmlFor="review-desc" className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2 block cursor-pointer">NHẬN XÉT CHI TIẾT:</label>
+                        <div className="flex items-center justify-between mb-2">
+                          <label htmlFor="review-desc" className="text-[9px] font-black text-gray-400 uppercase tracking-widest cursor-pointer">NHẬN XÉT CHI TIẾT:</label>
+                          <button
+                            type="button"
+                            onClick={() => setShowEmojiPicker(prev => !prev)}
+                            className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${
+                              showEmojiPicker ? 'bg-amber-100 text-amber-600' : 'bg-gray-50 text-gray-400 hover:text-amber-500 hover:bg-amber-50'
+                            }`}
+                            title="Chọn emoji"
+                          >
+                            <Smile size={14} />
+                          </button>
+                        </div>
+
+                        {showEmojiPicker && (
+                          <div className="mb-3 p-3 bg-white rounded-xl border border-gray-100 shadow-md max-h-36 overflow-y-auto">
+                            <div className="grid grid-cols-10 gap-1">
+                              {EMOJI_LIST.map((emoji, i) => (
+                                <button
+                                  key={i}
+                                  type="button"
+                                  onClick={() => insertReviewEmoji(emoji)}
+                                  className="w-7 h-7 flex items-center justify-center text-base rounded-lg hover:bg-amber-50 hover:scale-125 transition-all active:scale-90"
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                         <textarea
                          id="review-desc"
+                         ref={reviewTextareaRef}
                          value={reviewComment}
                          onChange={(e) => setReviewComment(e.target.value)}
                          placeholder="Hãy chia sẻ trải nghiệm của bạn và bé với sản phẩm này nhé…"
@@ -706,6 +769,22 @@ export default function ProductDetailPage() {
                         <p className="text-gray-600 text-sm leading-relaxed mb-4 bg-gray-50/50 p-4 rounded-2xl border border-transparent group-hover/review:border-orange-50 group-hover/review:bg-white transition-all">
                            {review.comment}
                         </p>
+
+                        {review.mediaUrls && review.mediaUrls.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mb-4">
+                            {review.mediaUrls.map((url, mIdx) => {
+                              const isVideo = url.match(/\.(mp4|webm)$/i);
+                              return isVideo ? (
+                                <video key={mIdx} src={`http://localhost:8081${url}`} controls className="w-32 h-32 rounded-xl object-cover border border-gray-100 bg-black" />
+                              ) : (
+                                <a key={mIdx} href={`http://localhost:8081${url}`} target="_blank" rel="noopener noreferrer">
+                                  <img src={`http://localhost:8081${url}`} alt="" className="w-20 h-20 rounded-xl object-cover border border-gray-100 hover:border-orange-200 transition-colors cursor-pointer" />
+                                </a>
+                              );
+                            })}
+                          </div>
+                        )}
+
                         <span className="text-[9px] font-bold text-gray-300 uppercase tracking-widest">{formatDate(review.createdAt)}</span>
                         
                         {review.staffReply && (
@@ -763,15 +842,17 @@ export default function ProductDetailPage() {
              </div>
              <button 
                onClick={handleAddToCart}
-               className="flex-1 md:flex-none px-8 py-3.5 bg-orange-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-orange-600 transition-all shadow-lg active:scale-95 shadow-orange-200 flex items-center gap-2"
+               disabled={product.soLuongTonKho === 0 || isAddingToCart}
+               className="flex-1 md:flex-none px-8 py-3.5 bg-orange-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all shadow-lg active:scale-95 shadow-orange-200 flex items-center gap-2"
              >
-               <ShoppingCart size={14} /> THÊM VÀO GIỎ
+               <ShoppingCart size={14} /> {isAddingToCart ? 'ĐANG THÊM…' : 'THÊM VÀO GIỎ'}
              </button>
              <button 
                onClick={handleBuyNow}
-               className="flex-1 md:flex-none px-8 py-3.5 bg-gray-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-all shadow-lg active:scale-95"
+               disabled={product.soLuongTonKho === 0 || isAddingToCart}
+               className="flex-1 md:flex-none px-8 py-3.5 bg-gray-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-black disabled:bg-gray-400 disabled:cursor-not-allowed transition-all shadow-lg active:scale-95"
              >
-               MUA NGAY
+               {isAddingToCart ? 'ĐANG THÊM…' : 'MUA NGAY'}
              </button>
           </div>
         </div>

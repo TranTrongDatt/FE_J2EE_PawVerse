@@ -5,7 +5,7 @@ import { ShoppingCart, Star, ArrowRight, Truck, Shield, RotateCcw, Headphones, P
 import { productService } from '../../api/productService';
 import { formatPrice } from '../../utils/formatters';
 import { cartService } from '../../api/cartService';
-import useCartStore from '../../store/useCartStore';
+import useCartStore, { getCartTotalQuantity } from '../../store/useCartStore';
 import useAuthStore from '../../store/useAuthStore';
 import toast from 'react-hot-toast';
 
@@ -212,9 +212,10 @@ export default function HomePage() {
       await cartService.addToCart(productId, 1);
       const cart = await cartService.getCart();
       const { setCartCount } = useCartStore.getState();
-      setCartCount(cart?.items?.length || 0);
+      setCartCount(getCartTotalQuantity(cart));
       queryClient.invalidateQueries(['cart']);
       toast.success('Đã thêm vào giỏ hàng!');
+      useCartStore.getState().openCartDrawer();
     } catch (error) {
       toast.error(error?.response?.data?.message || 'Không thể thêm vào giỏ hàng');
     } finally {
@@ -674,8 +675,8 @@ function ProductCard({ product, onAddToCart, isAdding = false }) {
         <img
           src={product.thumbnailUrl || (product.images?.[0]?.url ?
             (product.images[0].url.startsWith('http') ?
-              `http://localhost:8080${new URL(product.images[0].url).pathname}` :
-              `http://localhost:8080${product.images[0].url.startsWith('/') ? '' : '/'}${product.images[0].url}`) :
+              product.images[0].url :
+              `${product.images[0].url.startsWith('/') ? '' : '/'}${product.images[0].url}`) :
             hero)}
           alt={product.tenProduct}
           onError={(e) => { e.target.src = hero; }}
