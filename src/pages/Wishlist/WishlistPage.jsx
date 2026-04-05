@@ -292,7 +292,7 @@ export default function WishlistPage() {
                     <button
                       onClick={() => handleAddToCartFromWishlist(item.productId, item.wishlistId)}
                       disabled={item.inStock === false || addToCartFromWishlistMutation.isPending}
-                      aria-label="Chọn quà và thêm vào giỏ hàng"
+                      aria-label="Thêm vào giỏ"
                       className="w-full py-5 bg-gray-900 text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-xl hover:bg-orange-600 hover:-translate-y-1 transition-all active:scale-[0.98] disabled:bg-gray-100 disabled:text-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-3 group/btn relative overflow-hidden focus-visible:ring-2 focus-visible:ring-orange-500 outline-none"
                     >
                       <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-1000 -skew-x-12" />
@@ -301,7 +301,7 @@ export default function WishlistPage() {
                       ) : (
                         <>
                           <ShoppingCart size={18} />
-                          <span>CHỐN QUÀ NGAY</span>
+                          <span>THÊM VÀO GIỎ</span>
                         </>
                       )}
                     </button>

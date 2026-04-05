@@ -10,6 +10,7 @@ import LoadingSpinner from '../../components/common/LoadingSpinner';
 import toast from 'react-hot-toast';
 import useCartStore, { getCartTotalQuantity } from '../../store/useCartStore';
 import useAuthStore from '../../store/useAuthStore';
+import useWishlistStore from '../../store/useWishlistStore';
 
 export default function ProductDetailPage() {
   const { id } = useParams();
@@ -215,7 +216,8 @@ export default function ProductDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries(['wishlist']);
       queryClient.invalidateQueries(['wishlist-check', id]);
-      toast.success('Đã thêm vào danh sách yêu thích!');
+      toast.success('Đã thêm vào danh sách yêu thích! 💖');
+      useWishlistStore.getState().openWishlistDrawer();
     },
     onError: () => {
       toast.error('Không thể thêm vào danh sách yêu thích');

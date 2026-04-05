@@ -145,14 +145,38 @@ export default function ProductManagementPage() {
 
   const toggleEnabledMutation = useMutation({
     mutationFn: ({ id, isEnabled }) => adminService.toggleProductEnabled(id, isEnabled),
-    onSuccess: () => queryClient.invalidateQueries(['admin-products']),
-    onError: () => toast.error('Không thể thay đổi trạng thái'),
+    onMutate: async ({ id, isEnabled }) => {
+      await queryClient.cancelQueries({ queryKey: ['admin-products'] });
+      const prevQueries = queryClient.getQueriesData({ queryKey: ['admin-products'] });
+      queryClient.setQueriesData({ queryKey: ['admin-products'] }, (old) => {
+        if (!old?.content) return old;
+        return { ...old, content: old.content.map(p => p.idProduct === id ? { ...p, isEnabled } : p) };
+      });
+      return { prevQueries };
+    },
+    onError: (_err, _vars, context) => {
+      context?.prevQueries?.forEach(([key, data]) => queryClient.setQueryData(key, data));
+      toast.error('Không thể thay đổi trạng thái');
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['admin-products'] }),
   });
 
   const toggleFeaturedMutation = useMutation({
     mutationFn: ({ id, isFeatured }) => adminService.toggleProductFeatured(id, isFeatured),
-    onSuccess: () => queryClient.invalidateQueries(['admin-products']),
-    onError: () => toast.error('Không thể thay đổi trạng thái nổi bật'),
+    onMutate: async ({ id, isFeatured }) => {
+      await queryClient.cancelQueries({ queryKey: ['admin-products'] });
+      const prevQueries = queryClient.getQueriesData({ queryKey: ['admin-products'] });
+      queryClient.setQueriesData({ queryKey: ['admin-products'] }, (old) => {
+        if (!old?.content) return old;
+        return { ...old, content: old.content.map(p => p.idProduct === id ? { ...p, isFeatured } : p) };
+      });
+      return { prevQueries };
+    },
+    onError: (_err, _vars, context) => {
+      context?.prevQueries?.forEach(([key, data]) => queryClient.setQueryData(key, data));
+      toast.error('Không thể thay đổi trạng thái nổi bật');
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['admin-products'] }),
   });
 
   const openAddModal = () => {

@@ -33,7 +33,8 @@ import { cartService } from '../../api/cartService';
 import { orderService } from '../../api/orderService';
 import { authService } from '../../api/authService';
 import { formatPrice } from '../../utils/formatters';
-import { lookupHCMDistrict } from '../../utils/hcmDistrictMapping';
+import { lookupHCMDistrict, lookupHCMDistrictByCoords, isActuallyThuDuc } from '../../utils/hcmDistrictMapping';
+import { getProvinces, getDistricts, getWards, findProvinceCode, findDistrictCode } from '../../api/vietnamAddressService';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import toast from 'react-hot-toast';
 import useAuthStore from '../../store/useAuthStore';
@@ -141,6 +142,14 @@ export default function CheckoutPage() {
   const [pendingAddressData, setPendingAddressData] = useState(null);
   const [pendingShipping, setPendingShipping] = useState(null);
 
+  // Cascading address dropdown state
+  const [provincesList, setProvincesList] = useState([]);
+  const [districtsList, setDistrictsList] = useState([]);
+  const [wardsList, setWardsList] = useState([]);
+  const [selectedProvinceCode, setSelectedProvinceCode] = useState('');
+  const [selectedDistrictCode, setSelectedDistrictCode] = useState('');
+  const [addressApiError, setAddressApiError] = useState(false);
+
   const applyVoucherMutation = useMutation({
     mutationFn: (code) => orderService.applyCoupon(code),
     onSuccess: (voucher) => {
@@ -204,8 +213,50 @@ export default function CheckoutPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.idUser ?? profile?.id, user?.idUser ?? user?.id]);
 
+  // Load danh sách tỉnh/thành lần đầu
+  useEffect(() => {
+    getProvinces()
+      .then(data => setProvincesList(data))
+      .catch(() => setAddressApiError(true));
+  }, []);
+
+  // Load quận/huyện khi chọn tỉnh/thành
+  useEffect(() => {
+    if (!selectedProvinceCode) { setDistrictsList([]); setWardsList([]); return; }
+    getDistricts(selectedProvinceCode)
+      .then(data => setDistrictsList(data))
+      .catch(() => setDistrictsList([]));
+    setSelectedDistrictCode('');
+    setWardsList([]);
+  }, [selectedProvinceCode]);
+
+  // Load phường/xã khi chọn quận/huyện
+  useEffect(() => {
+    if (!selectedDistrictCode) { setWardsList([]); return; }
+    getWards(selectedDistrictCode)
+      .then(data => setWardsList(data))
+      .catch(() => setWardsList([]));
+  }, [selectedDistrictCode]);
+
+  // Auto-select dropdowns khi profile load
+  useEffect(() => {
+    if (!profile) return;
+    const autoSelectFromProfile = async () => {
+      try {
+        const pCode = await findProvinceCode(profile.tinhThanhPho);
+        if (pCode) {
+          setSelectedProvinceCode(pCode);
+          const dCode = await findDistrictCode(pCode, profile.quanHuyen);
+          if (dCode) setSelectedDistrictCode(dCode);
+        }
+      } catch { /* silent */ }
+    };
+    if (profile.tinhThanhPho) autoSelectFromProfile();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.idUser ?? profile?.id]);
+
   // Parse Vietnamese address từ Nominatim — hỗ trợ đầy đủ các loại địa chỉ VN
-  const parseVietnamAddress = (data) => {
+  const parseVietnamAddress = (data, lat = null, lng = null) => {
     const a = data.address || {};
     const displayParts = (data.display_name || '').split(',').map(s => s.trim()).filter(Boolean);
 
@@ -220,6 +271,7 @@ export default function CheckoutPage() {
     };
     const isoCode = a['ISO3166-2-lvl4'] || a['ISO3166-2-lvl6'] || '';
     const resolvedCentralCity = centralCityByISO[isoCode] || '';
+    const centralCityNames = Object.values(centralCityByISO).map(n => n.toLowerCase());
 
     // Fallback: parse city từ display_name (từ phải qua trái, bỏ "Việt Nam" và postcode)
     const parseCityFromDisplay = () => {
@@ -269,11 +321,11 @@ export default function CheckoutPage() {
 
     // Fallback: parse từ display_name theo từ khóa tiếng Việt
     if (!district && data.display_name) {
-      const centralCityNames = Object.values(centralCityByISO).map(n => n.toLowerCase());
       const byKeyword = displayParts.find((p) => {
         const lower = p.toLowerCase();
         if (centralCityNames.includes(lower)) return false;
-        return /^(quận|huyện|thị xã)\s/i.test(p);
+        // Match cả "Thành phố X" (sub-city, VD: TP Thủ Đức) cùng "Quận/Huyện/Thị xã"
+        return /^(quận|huyện|thị xã|thành phố)\s/i.test(p);
       });
       if (byKeyword) {
         district = byKeyword;
@@ -292,15 +344,45 @@ export default function CheckoutPage() {
       }
     }
 
-    // Fallback cho TP trực thuộc TW: tra cứu phường→quận từ mapping
-    if (!district && resolvedCentralCity === 'Thành phố Hồ Chí Minh' && ward) {
-      district = lookupHCMDistrict(ward);
+    // Cho TP.HCM: ưu tiên tra cứu phường→quận từ mapping (chính xác hơn OSM boundary)
+    // Dùng tọa độ để phân biệt phường trùng tên (VD: Phường 1 thuộc nhiều quận)
+    if (resolvedCentralCity === 'Thành phố Hồ Chí Minh' && ward) {
+      const coordLat = lat ?? parseFloat(data.lat);
+      const coordLng = lng ?? parseFloat(data.lon);
+      const mappedDistrict = lookupHCMDistrictByCoords(ward, coordLat, coordLng);
+      if (mappedDistrict) {
+        district = mappedDistrict;
+      }
+    }
+
+    // Validate "Thành phố Thủ Đức": OSM boundary bị sai rộng, nhiều quận khác bị gán nhầm
+    if (/thành phố thủ đức/i.test(district) && resolvedCentralCity === 'Thành phố Hồ Chí Minh') {
+      if (ward) {
+        const coordLat2 = lat ?? parseFloat(data.lat);
+        const coordLng2 = lng ?? parseFloat(data.lon);
+        const isNumberedWard = /^phường\s+\d+$/i.test(ward.trim());
+        if (isNumberedWard) {
+          // TP Thủ Đức KHÔNG có phường đánh số → chắc chắn sai boundary
+          district = lookupHCMDistrictByCoords(ward, coordLat2, coordLng2) || '';
+        } else if (!isActuallyThuDuc(ward, coordLat2, coordLng2)) {
+          // Phường có tên nhưng không nằm trong Thủ Đức → sai boundary
+          district = lookupHCMDistrictByCoords(ward, coordLat2, coordLng2) || '';
+        }
+      }
     }
 
     // Fallback cuối: nếu a.city khác resolvedCentralCity → có thể là đơn vị cấp quận
-    // VD: "Thành phố Thủ Đức" là quận thuộc HCM
     if (!district && resolvedCentralCity && a.city && a.city.toLowerCase() !== resolvedCentralCity.toLowerCase()) {
-      district = a.city;
+      // Validate: không nhận "Thành phố Thủ Đức" nếu ward không thuộc Thủ Đức
+      if (/thành phố thủ đức/i.test(a.city)) {
+        const coordLat3 = lat ?? parseFloat(data.lat);
+        const coordLng3 = lng ?? parseFloat(data.lon);
+        if (ward && isActuallyThuDuc(ward, coordLat3, coordLng3)) {
+          district = a.city;
+        }
+      } else {
+        district = a.city;
+      }
     }
 
     // --- STREET ADDRESS ---
@@ -339,12 +421,55 @@ export default function CheckoutPage() {
     setPendingAddressData(null);
     setIsGeocoding(true);
     try {
+      // Stage 1: zoom=18 — lấy chi tiết đường/số nhà/phường
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=vi&zoom=18`
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=vi&zoom=18&addressdetails=1`
       );
       const data = await res.json();
       if (data.address) {
-        setPendingAddressData(parseVietnamAddress(data));
+        const parsed = parseVietnamAddress(data, lat, lng);
+
+        // Stage 2: Nếu quận/huyện vẫn trống (thường xảy ra ở HCM vì Nominatim
+        // không trả city_district ở zoom cao), thử lại ở zoom=14 (cấp quận)
+        if (!parsed.district) {
+          try {
+            const res2 = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=vi&zoom=14&addressdetails=1`
+            );
+            const data2 = await res2.json();
+            if (data2.address) {
+              const a2 = data2.address;
+              // Trực tiếp lấy district từ raw data ở zoom thấp (đáng tin hơn)
+              const rawDistrict = a2.city_district || a2.district || a2.county || '';
+              if (rawDistrict) {
+                parsed.district = rawDistrict;
+              } else {
+                // Fallback: field city ở zoom=14 thường là cấp quận cho HCM
+                // VD: city = "Thành phố Thủ Đức", "Quận Bình Thạnh"
+                const cityVal = a2.city || '';
+                if (cityVal && /^(quận|huyện|thành phố)\s/i.test(cityVal)) {
+                  // Nếu là city cấp tỉnh (5 TP trực thuộc TW) thì bỏ qua
+                  const centralNames = ['thành phố hồ chí minh', 'thành phố hà nội', 'thành phố đà nẵng', 'thành phố hải phòng', 'thành phố cần thơ'];
+                  if (!centralNames.includes(cityVal.toLowerCase())) {
+                    parsed.district = cityVal;
+                  }
+                }
+              }
+
+              // Bổ sung ward nếu stage 1 cũng thiếu
+              if (!parsed.ward) {
+                const parsed2 = parseVietnamAddress(data2, lat, lng);
+                if (parsed2.ward) {
+                  parsed.ward = parsed2.ward;
+                }
+              }
+            }
+          } catch (e) {
+            console.error('District fallback geocoding error:', e);
+          }
+        }
+
+        setPendingAddressData(parsed);
       }
     } catch (err) {
       console.error('Geocoding error:', err);
@@ -372,22 +497,71 @@ export default function CheckoutPage() {
   }, [searchQuery]);
 
   const handleSelectSearchResult = (result) => {
-    setFlyTarget({ lat: parseFloat(result.lat), lng: parseFloat(result.lon) });
+    const lat = parseFloat(result.lat);
+    const lng = parseFloat(result.lon);
+    setFlyTarget({ lat, lng });
     setSearchResults([]);
     // Loại bỏ "Thành phố Thủ Đức" (boundary sai của OSM) khỏi text hiển thị
     const bogusBoundaries = ['thành phố thủ đức'];
     const parts = (result.display_name || '').split(',').map(s => s.trim());
     const cleanParts = parts.filter(p => !bogusBoundaries.includes(p.toLowerCase()));
     setSearchQuery(cleanParts.slice(0, 2).join(', '));
+    // Auto reverse-geocode vị trí → hiển thị preview địa chỉ ngay
+    handleMapClick({ lat, lng });
   };
 
-  const handleConfirmAddress = () => {
+  const handleConfirmAddress = async () => {
     if (!pendingPosition || !pendingAddressData) return;
     const { ward, district, city, streetAddress } = pendingAddressData;
     setValue('shippingAddress', streetAddress, { shouldValidate: true });
-    setValue('shippingWard', ward, { shouldValidate: true });
-    setValue('shippingDistrict', district, { shouldValidate: true });
-    setValue('shippingCity', city, { shouldValidate: true });
+
+    // Auto-select cascading dropdowns từ parsed address
+    try {
+      if (city) {
+        const pCode = await findProvinceCode(city);
+        if (pCode) {
+          setSelectedProvinceCode(pCode);
+          setValue('shippingCity', city, { shouldValidate: true });
+          if (district) {
+            // Đợi districts load xong rồi mới select
+            const dists = await getDistricts(pCode);
+            setDistrictsList(dists);
+            const dCode = await findDistrictCode(pCode, district);
+            if (dCode) {
+              setSelectedDistrictCode(dCode);
+              setValue('shippingDistrict', district, { shouldValidate: true });
+              if (ward) {
+                const wds = await getWards(dCode);
+                setWardsList(wds);
+                // Tìm ward khớp tên trong danh sách
+                const normalize = (s) => s.toLowerCase().replace(/^(phường|xã|thị trấn)\s+/i, '').trim();
+                const matched = wds.find(w => normalize(w.name) === normalize(ward));
+                if (matched) {
+                  setValue('shippingWard', matched.name, { shouldValidate: true });
+                } else {
+                  setValue('shippingWard', ward, { shouldValidate: true });
+                }
+              }
+            } else {
+              setValue('shippingDistrict', district, { shouldValidate: true });
+              setValue('shippingWard', ward, { shouldValidate: true });
+            }
+          }
+        } else {
+          // Fallback: set text values nếu không tìm được code
+          setValue('shippingCity', city, { shouldValidate: true });
+          setValue('shippingDistrict', district, { shouldValidate: true });
+          setValue('shippingWard', ward, { shouldValidate: true });
+        }
+      }
+    } catch (err) {
+      console.error('Auto-select dropdown error:', err);
+      // Fallback: set text values
+      setValue('shippingCity', city, { shouldValidate: true });
+      setValue('shippingDistrict', district, { shouldValidate: true });
+      setValue('shippingWard', ward, { shouldValidate: true });
+    }
+
     setSelectedPosition(pendingPosition);
     setMapShipping(pendingShipping);
     setPendingPosition(null);
@@ -744,35 +918,99 @@ export default function CheckoutPage() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:col-span-2">
-                      <div className="space-y-2">
-                        <label htmlFor="shippingWard" className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4 cursor-pointer">PHƯỜNG/XÃ</label>
-                        <input
-                          {...register('shippingWard')}
-                          id="shippingWard"
-                          autoComplete="shipping address-level4"
-                          placeholder="ABC…"
-                          className="w-full px-6 py-4 bg-gray-50/50 border-2 border-transparent rounded-[1.25rem] focus:outline-none transition-all font-bold text-gray-800 focus:border-orange-200 focus:bg-white"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label htmlFor="shippingDistrict" className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4 cursor-pointer">QUẬN/HUYỆN *</label>
-                        <input
-                          {...register('shippingDistrict')}
-                          id="shippingDistrict"
-                          autoComplete="shipping address-level3"
-                          placeholder="XYZ…"
-                          className={`w-full px-6 py-4 bg-gray-50/50 border-2 rounded-[1.25rem] focus:outline-none transition-all font-bold text-gray-800 ${errors.shippingDistrict ? 'border-red-100 bg-red-50' : 'border-transparent focus:border-orange-200 focus:bg-white'}`}
-                        />
-                      </div>
+                      {/* Tỉnh/Thành — dropdown đầu tiên */}
                       <div className="space-y-2">
                         <label htmlFor="shippingCity" className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4 cursor-pointer">TỈNH/THÀNH *</label>
-                        <input
-                          {...register('shippingCity')}
-                          id="shippingCity"
-                          autoComplete="shipping address-level2"
-                          placeholder="HCM…"
-                          className={`w-full px-6 py-4 bg-gray-50/50 border-2 rounded-[1.25rem] focus:outline-none transition-all font-bold text-gray-800 ${errors.shippingCity ? 'border-red-100 bg-red-50' : 'border-transparent focus:border-orange-200 focus:bg-white'}`}
-                        />
+                        {addressApiError ? (
+                          <input
+                            {...register('shippingCity')}
+                            id="shippingCity"
+                            placeholder="Nhập tỉnh/thành…"
+                            className={`w-full px-6 py-4 bg-gray-50/50 border-2 rounded-[1.25rem] focus:outline-none transition-all font-bold text-gray-800 ${errors.shippingCity ? 'border-red-100 bg-red-50' : 'border-transparent focus:border-orange-200 focus:bg-white'}`}
+                          />
+                        ) : (
+                          <select
+                            id="shippingCity"
+                            value={selectedProvinceCode}
+                            onChange={(e) => {
+                              const code = e.target.value;
+                              setSelectedProvinceCode(code);
+                              const prov = provincesList.find(p => String(p.code) === code);
+                              setValue('shippingCity', prov ? prov.name : '', { shouldValidate: true });
+                              setValue('shippingDistrict', '');
+                              setValue('shippingWard', '');
+                            }}
+                            className={`w-full px-6 py-4 bg-gray-50/50 border-2 rounded-[1.25rem] focus:outline-none transition-all font-bold text-gray-800 ${errors.shippingCity ? 'border-red-100 bg-red-50' : 'border-transparent focus:border-orange-200 focus:bg-white'}`}
+                          >
+                            <option value="">-- Chọn Tỉnh/Thành --</option>
+                            {provincesList.map(p => (
+                              <option key={p.code} value={p.code}>{p.name}</option>
+                            ))}
+                          </select>
+                        )}
+                        <input type="hidden" {...register('shippingCity')} />
+                      </div>
+
+                      {/* Quận/Huyện — load theo tỉnh/thành */}
+                      <div className="space-y-2">
+                        <label htmlFor="shippingDistrict" className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4 cursor-pointer">QUẬN/HUYỆN *</label>
+                        {addressApiError ? (
+                          <input
+                            {...register('shippingDistrict')}
+                            id="shippingDistrict"
+                            placeholder="Nhập quận/huyện…"
+                            className={`w-full px-6 py-4 bg-gray-50/50 border-2 rounded-[1.25rem] focus:outline-none transition-all font-bold text-gray-800 ${errors.shippingDistrict ? 'border-red-100 bg-red-50' : 'border-transparent focus:border-orange-200 focus:bg-white'}`}
+                          />
+                        ) : (
+                          <select
+                            id="shippingDistrict"
+                            value={selectedDistrictCode}
+                            onChange={(e) => {
+                              const code = e.target.value;
+                              setSelectedDistrictCode(code);
+                              const dist = districtsList.find(d => String(d.code) === code);
+                              setValue('shippingDistrict', dist ? dist.name : '', { shouldValidate: true });
+                              setValue('shippingWard', '');
+                            }}
+                            disabled={!selectedProvinceCode}
+                            className={`w-full px-6 py-4 bg-gray-50/50 border-2 rounded-[1.25rem] focus:outline-none transition-all font-bold text-gray-800 ${!selectedProvinceCode ? 'opacity-50 cursor-not-allowed' : ''} ${errors.shippingDistrict ? 'border-red-100 bg-red-50' : 'border-transparent focus:border-orange-200 focus:bg-white'}`}
+                          >
+                            <option value="">-- Chọn Quận/Huyện --</option>
+                            {districtsList.map(d => (
+                              <option key={d.code} value={d.code}>{d.name}</option>
+                            ))}
+                          </select>
+                        )}
+                        <input type="hidden" {...register('shippingDistrict')} />
+                      </div>
+
+                      {/* Phường/Xã — load theo quận/huyện */}
+                      <div className="space-y-2">
+                        <label htmlFor="shippingWard" className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4 cursor-pointer">PHƯỜNG/XÃ</label>
+                        {addressApiError ? (
+                          <input
+                            {...register('shippingWard')}
+                            id="shippingWard"
+                            placeholder="Nhập phường/xã…"
+                            className="w-full px-6 py-4 bg-gray-50/50 border-2 border-transparent rounded-[1.25rem] focus:outline-none transition-all font-bold text-gray-800 focus:border-orange-200 focus:bg-white"
+                          />
+                        ) : (
+                          <select
+                            id="shippingWard"
+                            onChange={(e) => {
+                              const wardName = e.target.value;
+                              setValue('shippingWard', wardName, { shouldValidate: true });
+                            }}
+                            disabled={!selectedDistrictCode}
+                            className={`w-full px-6 py-4 bg-gray-50/50 border-2 border-transparent rounded-[1.25rem] focus:outline-none transition-all font-bold text-gray-800 ${!selectedDistrictCode ? 'opacity-50 cursor-not-allowed' : ''} focus:border-orange-200 focus:bg-white`}
+                          >
+                            <option value="">-- Chọn Phường/Xã --</option>
+                            {wardsList.map(w => (
+                              <option key={w.code} value={w.name}>{w.name}</option>
+                            ))}
+                          </select>
+                        )}
+                        <input type="hidden" {...register('shippingWard')} />
                       </div>
                     </div>
 
